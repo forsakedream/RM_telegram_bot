@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 import requests
-token = '1114935726:AAHySxNvyQg5Sn3SWQgxS38wiIXI4mvgDoo'
-
+token = 'Токен для бота'
+#Доступные состояния
 states = {'start': 0, 'enter_last': 1, 'enter_modem': 2, 'enter_modem_apn': 3}
 
 
-url = "https://supp-api.rm-tech.ru/mar"
+url = "https://supp-api.rm-tech.ru/mar" #адрес API для работы с модемами и МАРами
 szpk_last = [6, 7, 8, 10, 13, 14, 15, 18, 19, 20, 41, 99, 100, 237, 238, 239, 240]
 mcc_last = [i for i in range(45, 87)]
 mcc_last.extend([101, 106, 107, 108, 109, 110, 111, 112, 113])
@@ -23,7 +23,7 @@ commands = {
                                }
 
 modem_modes = ['0302', '03', '02']
-
+#Переменные для пользовательских данных
 users_states = {}
 users_lst_list = {}
 users_lst_modem_list = {}
@@ -31,7 +31,7 @@ users_commands = {}
 
 i = 0
 
-
+#Функция для получения текущего статуса
 def get_current_state(user_id):
     try:
         return users_states[user_id]
@@ -39,7 +39,7 @@ def get_current_state(user_id):
         users_states[user_id] = 0
         return users_states[user_id]
 
-
+#Функция для установления статуса пользователя
 def set_state(user_id, value):
     try:
         users_states[user_id] = states[value]
@@ -47,7 +47,7 @@ def set_state(user_id, value):
     except:
          return False
 
-
+#Функция для проверки значений
 def check_value(a, state, user):
     b = a.split()
     checked = []

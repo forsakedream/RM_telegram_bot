@@ -72,8 +72,7 @@ def enter_last(message):
     if config.users_commands[message.chat.id] == 1:
         mess = config.work(config.users_lst_modem_list[message.chat.id], config.users_commands[message.chat.id])
         for i in range(len(mess)):
-            for j in range(len(mess[i])):
-                bot.send_message(message.chat.id, mess[i][j])
+            bot.send_message(message.chat.id, mess[i][0])
         bot.send_message(message.chat.id, 'Я все сделал. Нажми /start, чтобы попробовать снова ')
         config.set_state(message.chat.id, 'start')
     elif config.users_commands[message.chat.id] in [2, 3, 5, 6, 7, 8, 10]:

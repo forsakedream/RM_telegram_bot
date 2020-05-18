@@ -2,19 +2,19 @@
 import config
 import telebot
 from telebot import apihelper
-# import logging
+
 # Настройка прокси
 # apihelper.proxy = {'https' : 'socks5://95.216.33.245:10614'}
+
 # Токен для бота
 bot = telebot.TeleBot(config.token)
-# logger = telebot.logger
-# telebot.logger.setLevel(logging.DEBUG)
 
+#Функция для отправки логов в чат
 def log(message, state):
     bot.send_message(-1001352225714, f'{message.from_user.first_name} {message.from_user.last_name} '
                                      f'({message.from_user.id}) \nСостояние: {state}\nВвел: {message.text}\n')
 
-
+#Хэндлер для вывода справки об использовании бота
 @bot.message_handler(commands=['help'])
 def help_message(message):
     if message.chat.id == 261169183:
@@ -47,32 +47,33 @@ def help_message(message):
                          f'то бот будет предлагать ввести значения для каждой ласточки\n\n'
                          f'Нажми /start, чтобы продолжить')
 
-
+#Хэндлер для запуска бота
 @bot.message_handler(commands=['start'])
 def start_message(message):
-    state = config.get_current_state(message.chat.id)
-    if state == config.states['enter_last']:
+    state = config.get_current_state(message.chat.id) #из файла config получаем текущий статус пользователя
+    if state == config.states['enter_last']: #если не был введен запрос, просим ввести снова
         bot.send_message(message.chat.id, 'Кажется, ты не ввел запрос. '
                                           'Введи номер команды и номера ласточек через пробел')
-    elif state == config.states['enter_modem']:
+    elif state == config.states['enter_modem']: #если не были введена номера модемов, просим ввести снова
         bot.send_message(message.chat.id, 'Кажется, ты не ввел номера модемов. Введи их через пробел')
-    elif state == config.states['enter_modem_apn']:
+    elif state == config.states['enter_modem_apn']: #если не были введены параметры модемов, просим ввести снова
         bot.send_message(message.chat.id, 'Кажется, ты не ввел номер модема и режим модема или APN. '
                                           'Введи их через пробел')
-    else:
+    else: #во всем остальных случаях, запускаем бота
         bot.send_message(message.chat.id, f'Введи запрос: \n\nНажми /help для справки')
         config.set_state(message.chat.id, 'enter_last')
 
-
+#После ввода запроса и изменения состояния на enter_last, обрабатываем запрос пользователя
 @bot.message_handler(func=lambda message: config.get_current_state(message.chat.id) == config.states['enter_last'])
 def enter_last(message):
     log(message, config.get_current_state(message.chat.id))
-    config.check_value(message.text, config.get_current_state(message.chat.id), message.chat.id)
+    config.check_value(message.text, config.get_current_state(message.chat.id), message.chat.id) #проверяем введенные данные
 
-    if config.users_commands[message.chat.id] == 1:
+    #Смотрим, какую команду ввел пользователь и продолжаем работу
+    if config.users_commands[message.chat.id] == 1: #если нужно просто перезагрузить ласточки, можно сразу же это сделать
         mess = config.work(config.users_lst_modem_list[message.chat.id], config.users_commands[message.chat.id])
         for i in range(len(mess)):
-            bot.send_message(message.chat.id, mess[i][0])
+               bot.send_message(message.chat.id, mess[i][0])
         bot.send_message(message.chat.id, 'Я все сделал. Нажми /start, чтобы попробовать снова ')
         config.set_state(message.chat.id, 'start')
     elif config.users_commands[message.chat.id] in [2, 3, 5, 6, 7, 8, 10]:
@@ -98,11 +99,11 @@ def enter_last(message):
         bot.send_message(message.chat.id, f'Такого я не умею. Нажми /start, чтобы попробовать снова')
         config.set_state(message.chat.id, 'start')
 
-
+#Этот хэндлер будет работать с модемами
 @bot.message_handler(func=lambda message: config.get_current_state(message.chat.id) == config.states['enter_modem'])
 def enter_modem(message):
     log(message, config.get_current_state(message.chat.id))
-    row = config.check_value(message.text, config.get_current_state(message.chat.id), message.chat.id)
+    row = config.check_value(message.text, config.get_current_state(message.chat.id), message.chat.id) #проверяем то, что ввел пользователь
     if row[0] == -1:
         bot.send_message(message.chat.id, f'Ты ввел неправильные данные.\n '
                                           f'Введи номера veth через пробел для '
@@ -110,12 +111,12 @@ def enter_modem(message):
         return
     for j in row:
         config.users_lst_modem_list[message.chat.id][config.i][j] = 1
-    if config.i != len(config.users_lst_list[message.chat.id]) - 1:
+    if config.i != len(config.users_lst_list[message.chat.id]) - 1: #здесь мы запускаем цикл ввода модемов, если ласточка не одна
         config.i += 1
         bot.send_message(message.chat.id, f'Введи номера veth через пробел для '
                                           f'ЭС-2Г-{config.users_lst_list[message.chat.id][config.i]}: ')
         return
-    else:
+    else: #как только все ввели - получаем результат
         mess = config.work(config.users_lst_modem_list[message.chat.id], config.users_commands[message.chat.id])
         for i in range(len(mess)):
             for j in range(len(mess[i])):
@@ -123,7 +124,7 @@ def enter_modem(message):
         bot.send_message(message.chat.id, 'Я все сделал. Нажми /start, чтобы попробовать снова ')
         config.set_state(message.chat.id, 'start')
 
-
+#Этот хэндлер будет работать с параметрами модемов
 @bot.message_handler(func=lambda message: config.get_current_state(message.chat.id) == config.states['enter_modem_apn'])
 def enter_modem(message):
     log(message, config.get_current_state(message.chat.id))
@@ -133,10 +134,9 @@ def enter_modem(message):
     except ValueError:
         row[0] = -1
 
-    if len(row) < 2:
+    if len(row) < 2 or row[1] not in config.modem_modes:
         row[0] = -1
-    if row[1] not in config.modem_modes:
-        row[0] = -1
+
     if row[0] == -1:
         bot.send_message(message.chat.id, f'Ты ввел неправильные данные.\n '
                                           f'Введи номера veth через пробел для '

@@ -1,169 +1,148 @@
 #!/usr/bin/env python3
 import config
 import telebot
-from telebot import apihelper
-
-# Настройка прокси
-# apihelper.proxy = {'https' : 'socks5://95.216.33.245:10614'}
-
+import utils
+from db import SQLighter
 # Токен для бота
 bot = telebot.TeleBot(config.token)
+db = SQLighter(config.database_name)
+db.truncate()
 
-#Функция для отправки логов в чат
+
+# Функция для отправки логов в чат
 def log(message, state):
     bot.send_message(-1001352225714, f'{message.from_user.first_name} {message.from_user.last_name} '
                                      f'({message.from_user.id}) \nСостояние: {state}\nВвел: {message.text}\n')
 
-#Хэндлер для вывода справки об использовании бота
+
+# Хэндлер для вывода справки об использовании бота
 @bot.message_handler(commands=['help'])
 def help_message(message):
-    if message.chat.id == 261169183:
-        bot.send_message(-1001352225714, f'Пользователи: \n\n{list(config.users_states.keys())}')
-    else:
-        bot.send_message(message.chat.id,
+    db.set_default(message.from_user.id)
+    db.insert_user(message.from_user.id)
+    if message.from_user.id == 261169183:
+        bot.send_message(-1001352225714, f'Пользователи: \n\n{db.get_all("users")}')
+
+    bot.send_message(message.chat.id,
                          f'Команды: \n'
                          f'1. Ребут МАРа\n'
                          f'2. Ребут модема\n'
-                         f'3. Узнать режим работы модема\n'
-                         f'4. Установить режим работы модема\n'
-                         f'5. Узнать параметры сигнала модема\n'
-                         f'6. Узнать iccid модема\n'
-                         f'7. Вывести информацию для мониторинга\n'
-                         f'8. Узнать APN\n'
-                         f'9. Установить APN\n'
-                         f'10. Узнать статус сим-карты\n\n'
+                         f'3. Установить APN\n'
+                         f'4. Установить режим работы модема\n\n'
                          f'Запрос вводится в виде: \n\n<номер команды> <номера ласточек через пробел>\n\n'
                          f'Например, запрос "1 45 65 72" ребутнет МАРы на ЭС-2Г-45, ЭС-2Г-65, ЭС-2Г-72\n\n'
-                         f'После ввода в запросе команд №2, 3, 5, 6, 7, 8, 10, бот предложит ввести номера модемов\n\n'
+                         f'После ввода в запросе команды №2 бот предложит ввести номера модемов\n\n'
                          f'Например, сперва нужно ввести запрос "2 65" для работы с ласточкой ЭС-2Г-65.\n'
                          f'После чего, бот предложит ввести номера модемов\n'
                          f'Например, "1 2 3", что ребутнет модемы 1, 2, 3 на ЭС-2Г-65\n\n'
-                         f'После ввода в запросе команд №4,9 бот предложит ввести номер модема и нужное значение'
+                         f'После ввода в запросе команд 3 и 4 бот предложит ввести номер модема и нужное значение'
                          f' (только одно)\n\n'
                          f'Например, сперва нужно ввести запрос "4 45" для работы с ласточкой ЭС-2Г-45\n'
-                         f'После чего, бот предложит ввести номер модемов и значение APN или режим модема (только одно)\n'
+                         f'После чего бот предложит ввести номер модемов и значение APN или режим модема (только одно)\n'
                          f'Например, "2 0302", что установит на ЭС-2Г-45 режим работы второго модема 3G-LTE\n\n'
-                         f'Если в исходном запросе было указано несколько ласточек и команда 2-10, '
+                         f'Если в исходном запросе было указано несколько ласточек и команда 2-4, '
                          f'то бот будет предлагать ввести значения для каждой ласточки\n\n'
-                         f'Нажми /start, чтобы продолжить')
+                         f'Нажми /start, чтобы вернуться')
 
-#Хэндлер для запуска бота
+
+# Хэндлер для запуска бота
 @bot.message_handler(commands=['start'])
 def start_message(message):
-    state = config.get_current_state(message.chat.id) #из файла config получаем текущий статус пользователя
-    if state == config.states['enter_last']: #если не был введен запрос, просим ввести снова
+    db.set_default(message.from_user.id)
+    db.insert_user(message.from_user.id)
+    state = db.get_state(message.from_user.id)
+    if state == config.states['enter_last']: # если не был введен запрос, просим ввести снова
         bot.send_message(message.chat.id, 'Кажется, ты не ввел запрос. '
                                           'Введи номер команды и номера ласточек через пробел')
-    elif state == config.states['enter_modem']: #если не были введена номера модемов, просим ввести снова
+    elif state == config.states['enter_modem']: # если не были введена номера модемов, просим ввести снова
         bot.send_message(message.chat.id, 'Кажется, ты не ввел номера модемов. Введи их через пробел')
-    elif state == config.states['enter_modem_apn']: #если не были введены параметры модемов, просим ввести снова
+    elif state == config.states['enter_modem_apn']: # если не были введены параметры модемов, просим ввести снова
         bot.send_message(message.chat.id, 'Кажется, ты не ввел номер модема и режим модема или APN. '
                                           'Введи их через пробел')
-    else: #во всем остальных случаях, запускаем бота
+    else: # во всем остальных случаях, запускаем бота
         bot.send_message(message.chat.id, f'Введи запрос: \n\nНажми /help для справки')
-        config.set_state(message.chat.id, 'enter_last')
+        db.set_state(message.from_user.id, 1)
 
-#После ввода запроса и изменения состояния на enter_last, обрабатываем запрос пользователя
-@bot.message_handler(func=lambda message: config.get_current_state(message.chat.id) == config.states['enter_last'])
+
+# После ввода запроса и изменения состояния на enter_last, обрабатываем запрос пользователя
+@bot.message_handler(func=lambda message: db.get_state(message.from_user.id) == config.states['enter_last'])
 def enter_last(message):
-    log(message, config.get_current_state(message.chat.id))
-    config.check_value(message.text, config.get_current_state(message.chat.id), message.chat.id) #проверяем введенные данные
-
-    #Смотрим, какую команду ввел пользователь и продолжаем работу
-    if config.users_commands[message.chat.id] == 1: #если нужно просто перезагрузить ласточки, можно сразу же это сделать
-        mess = config.work(config.users_lst_modem_list[message.chat.id], config.users_commands[message.chat.id])
-        for i in range(len(mess)):
-               bot.send_message(message.chat.id, mess[i][0])
-        bot.send_message(message.chat.id, 'Я все сделал. Нажми /start, чтобы попробовать снова ')
-        config.set_state(message.chat.id, 'start')
-    elif config.users_commands[message.chat.id] in [2, 3, 5, 6, 7, 8, 10]:
-        config.set_state(message.chat.id, 'enter_modem')
-        config.i = 0
+    log(message, db.get_state(message.from_user.id))
+    utils.last_handler(message)
+    command = db.get_command(message.from_user.id)
+    last = db.get_last(message.from_user.id)
+    # Смотрим, какую команду ввел пользователь и продолжаем работу
+    if command == 1:
+        making_request(message)
+    elif command == 2:
+        db.set_state(message.from_user.id, 2)
         bot.send_message(message.chat.id, f'Введи номера veth через пробел для '
-                                          f'ЭС-2Г-{config.users_lst_list[message.chat.id][config.i]}: ')
-    elif config.users_commands[message.chat.id] in [4, 9]:
-        config.set_state(message.chat.id, 'enter_modem_apn')
-        config.i = 0
-        if config.users_commands[message.chat.id] == 4:
-            com = 'режим работы модема'
-            com2 = f'\nДля установки режима LTE-3G, введи 0302\n' \
-                   f'Для установки режима LTE, введи 03\n' \
-                   f'Для установки режима 3G, введи 02\n'
-        else:
-            com = 'APN'
-            com2 = ''
+                                          f'ЭС-2Г-{last[db.get_cycle(message.from_user.id)][0]}: ')
+    elif command in [3, 4]:
+        db.set_state(message.from_user.id, 3)
+        bot_mes = f'Введи номер veth и ' + (command == 3)*'APN'+(command == 4)*f'режим работы модема' + \
+                  f' для ЭС-2Г-{last[db.get_cycle(message.from_user.id)][0]}:'
+        bot.send_message(message.chat.id, bot_mes)
 
-        bot.send_message(message.chat.id, f'Введи номер veth и {com} для '
-                                          f'ЭС-2Г-{config.users_lst_list[message.chat.id][config.i]}: {com2}')
-    elif config.users_commands[message.chat.id] == -1:
-        bot.send_message(message.chat.id, f'Такого я не умею. Нажми /start, чтобы попробовать снова')
-        config.set_state(message.chat.id, 'start')
+    elif db.get_command(message.from_user.id) == -1:
+        bot.send_message(message.chat.id, f'Такого я не умею.')
+        bot.send_message(message.chat.id, f'Введи запрос: \n\nНажми /help для справки')
+        db.set_state(message.from_user.id, 1)
 
-#Этот хэндлер будет работать с модемами
-@bot.message_handler(func=lambda message: config.get_current_state(message.chat.id) == config.states['enter_modem'])
+
+# Этот хэндлер будет работать с модемами
+@bot.message_handler(func=lambda message: db.get_state(message.from_user.id) == config.states['enter_modem'])
 def enter_modem(message):
-    log(message, config.get_current_state(message.chat.id))
-    row = config.check_value(message.text, config.get_current_state(message.chat.id), message.chat.id) #проверяем то, что ввел пользователь
+    log(message, db.get_state(message.from_user.id))
+    row = utils.modem_handler(message)
+    last = db.get_last(message.from_user.id)
     if row[0] == -1:
         bot.send_message(message.chat.id, f'Ты ввел неправильные данные.\n '
                                           f'Введи номера veth через пробел для '
-                                          f'ЭС-2Г-{config.users_lst_list[message.chat.id][config.i]}: ')
+                                          f'ЭС-2Г-{last[db.get_cycle(message.from_user.id)][0]}: ')
         return
-    for j in row:
-        config.users_lst_modem_list[message.chat.id][config.i][j] = 1
-    if config.i != len(config.users_lst_list[message.chat.id]) - 1: #здесь мы запускаем цикл ввода модемов, если ласточка не одна
-        config.i += 1
+    db.update_cycle(message.from_user.id)
+    if db.get_cycle(message.from_user.id) != len(last):
         bot.send_message(message.chat.id, f'Введи номера veth через пробел для '
-                                          f'ЭС-2Г-{config.users_lst_list[message.chat.id][config.i]}: ')
+                                          f'ЭС-2Г-{last[db.get_cycle(message.from_user.id)][0]}: ')
         return
-    else: #как только все ввели - получаем результат
-        mess = config.work(config.users_lst_modem_list[message.chat.id], config.users_commands[message.chat.id])
-        for i in range(len(mess)):
-            for j in range(len(mess[i])):
-                bot.send_message(message.chat.id, mess[i][j])
-        bot.send_message(message.chat.id, 'Я все сделал. Нажми /start, чтобы попробовать снова ')
-        config.set_state(message.chat.id, 'start')
+    else:
+        making_request(message)
 
-#Этот хэндлер будет работать с параметрами модемов
-@bot.message_handler(func=lambda message: config.get_current_state(message.chat.id) == config.states['enter_modem_apn'])
+
+# Этот хэндлер будет работать с параметрами модемов
+@bot.message_handler(func=lambda message: db.get_state(message.from_user.id) == config.states['enter_modem_apn'])
 def enter_modem(message):
-    log(message, config.get_current_state(message.chat.id))
-    row = message.text.split()
-    try:
-        row[0] = int(row[0])
-    except ValueError:
-        row[0] = -1
-
-    if len(row) < 2 or row[1] not in config.modem_modes:
-        row[0] = -1
+    log(message, db.get_state(message.from_user.id))
+    row = utils.modem_params_handler(message)
+    last = db.get_last(message.from_user.id)
+    command = db.get_command(message.from_user.id)
+    bot_mes = f'Введи номер veth и ' + (command == 3) * 'APN' + (command == 4) * f'режим работы модема' + \
+              f' для ЭС-2Г-{last[db.get_cycle(message.from_user.id)][0]}:'
 
     if row[0] == -1:
-        bot.send_message(message.chat.id, f'Ты ввел неправильные данные.\n '
-                                          f'Введи номера veth через пробел для '
-                                          f'ЭС-2Г-{config.users_lst_list[message.chat.id][config.i]}: ')
+        bot.send_message(message.chat.id, f'Ты ввел неправильные данные.\n {bot_mes}')
         return
-    if config.users_commands[message.chat.id] == 4:
-        com = 'режим работы модема'
-        com2 = f'\nДля установки режима LTE-3G, введи 0302\n' \
-               f'Для установки режима LTE, введи 03\n' \
-               f'Для установки режима 3G, введи 02\n'
-    else:
-        com = 'APN'
-        com2 = ''
 
-    config.users_lst_modem_list[message.chat.id][config.i][row[0]] = row[1]
-    if config.i != len(config.users_lst_list[message.chat.id]) - 1:
-        config.i += 1
-        bot.send_message(message.chat.id, f'Введи номер veth и '
-                                          f'{com} для ЭС-2Г-{config.users_lst_list[message.chat.id][config.i]}: {com2}')
+    db.update_cycle(message.from_user.id)
+    if db.get_cycle(message.from_user.id) != len(last):
+        bot_mes = f'Введи номер veth и ' + (command == 3) * 'APN' + (command == 4) * f'режим работы модема' + \
+                  f' для ЭС-2Г-{last[db.get_cycle(message.from_user.id)][0]}:'
+        bot.send_message(message.chat.id, bot_mes)
         return
     else:
-        mess = config.work(config.users_lst_modem_list[message.chat.id], config.users_commands[message.chat.id])
-        for i in range(len(mess)):
-            for j in range(len(mess[i])):
-                bot.send_message(message.chat.id, mess[i][j])
+        making_request(message)
 
-        bot.send_message(message.chat.id, 'Я все сделал. Нажми /start, чтобы попробовать снова ')
-        config.set_state(message.chat.id, 'start')
 
-bot.polling()
+def making_request(message):
+    mess = utils.make_requests(message.from_user.id)
+    for i in range(len(mess)):
+        for j in range(len(mess[i])):
+            bot.send_message(message.chat.id, mess[i][j])
+    db.set_default(message.from_user.id)
+    bot.send_message(message.chat.id, 'Я все сделал.')
+    bot.send_message(message.chat.id, f'Введи запрос: \n\nНажми /help для справки')
+
+
+if __name__ == '__main__':
+    bot.infinity_polling()
